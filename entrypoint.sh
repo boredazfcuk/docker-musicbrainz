@@ -5,7 +5,7 @@ Initialise(){
    echo
    echo "$(date '+%c') INFO:    ***** Configuring Musicbrainz container launch environment *****"
    echo "$(date '+%c') INFO:    $(cat /etc/*-release | grep "PRETTY_NAME" | sed 's/PRETTY_NAME=//g' | sed 's/"//g')"
-   echo "$(date '+%c') INFO:    Local user: ${stack_user:=stackman}:${user_id:=1000}"
+   echo "$(date '+%c') INFO:    Local user: ${stack_user:=stackman}:${stack_uid:=1000}"
    echo "$(date '+%c') INFO:    Local group: ${musicbrainz_group:=musicbrainz}:${musicbrainz_group_id:=1000}"
    echo "$(date '+%c') INFO:    Password: ${stack_password:=Skibidibbydibyodadubdub}"
    echo "$(date '+%c') INFO:    Musicbrainz application directory: ${app_base_dir:=/Musicbrainz}"
@@ -63,26 +63,26 @@ CreateGroup(){
          fi
       else
          echo "$(date '+%c') INFO:    Creating group ${musicbrainz_group}:${musicbrainz_group_id}"
-         addgroup --gid "${musicbrainz_group_id}" "${musicbrainz_group}"
+         addgroup --gid "${musicbrainz_group_id}" "${musicbrainz_group}" --quiet
       fi
    fi
 }
 
 CreateUser(){
-   if [ "$(grep -c "^${stack_user}:x:${user_id}:${musicbrainz_group_id}" "/etc/passwd")" -eq 1 ]; then
-      echo "$(date '+%c') INFO:    User already created: ${stack_user}:${user_id}"
+   if [ "$(grep -c "^${stack_user}:x:${stack_uid}:${musicbrainz_group_id}" "/etc/passwd")" -eq 1 ]; then
+      echo "$(date '+%c') INFO:    User already created: ${stack_user}:${stack_uid}"
    else
       if [ "$(grep -c "^${stack_user}:" "/etc/passwd")" -eq 1 ]; then
          echo "$(date '+%c') ERROR:   User name already in use: ${stack_user} - exiting"
          sleep 120
          exit 1
-      elif [ "$(grep -c ":x:${user_id}:$" "/etc/passwd")" -eq 1 ]; then
-         echo "$(date '+%c') ERROR:   User id already in use: ${user_id} - exiting"
+      elif [ "$(grep -c ":x:${stack_uid}:$" "/etc/passwd")" -eq 1 ]; then
+         echo "$(date '+%c') ERROR:   User id already in use: ${stack_uid} - exiting"
          sleep 120
          exit 1
       else
-         echo "$(date '+%c') INFO:    Creating user ${stack_user}:${user_id}"
-         adduser --shell /bin/bash --disabled-password --ingroup "${musicbrainz_group}" --uid "${user_id}" "${stack_user}" --home "/home/${stack_user}" --gecos ''
+         echo "$(date '+%c') INFO:    Creating user ${stack_user}:${stack_uid}"
+         adduser --shell /bin/bash --disabled-password --ingroup "${musicbrainz_group}" --uid "${stack_uid}" "${stack_user}" --home "/home/${stack_user}" --gecos '' --quiet
       fi
    fi
 }
@@ -125,7 +125,7 @@ GetDBSnapshot(){
 
 SetOwnerAndGroup(){
    echo "$(date '+%c') INFO:    Correct owner and group of application files, if required"
-   find "/run" -name "/run/fcgi.pid" ! -user "${stack_user}" -exec chown "${stack_user}" "/run/fcgi.pid";
+   find "/run" -name "/run/fcgi.pid" ! -user "${stack_user}" -exec chown "${stack_user}" {} \;
    find "/run" -name "/run/fcgi.pid" ! -group "${musicbrainz_group}" -exec chgrp "${musicbrainz_group}" {} \;
    find "/run/postgresql" ! -user "${stack_user}" -exec chown "${stack_user}" {} \;
    find "/run/postgresql" ! -group "${musicbrainz_group}" -exec chgrp "${musicbrainz_group}" {} \;
@@ -218,9 +218,12 @@ ConfigureMusicbrainz(){
          -e "s/sub WEB_SERVER  .*/sub WEB_SERVER { \"${web_address}\" }/" \
          "${config_dir}/musicbrainz/DBDefs.pm"
       cd "${app_base_dir}" || exit
-      echo "$(date '+%c') INFO:    Build static web resources"
+      echo "$(date '+%c') INFO:    Build static web resources..."
+      echo
       ./script/compile_resources.sh
       cd - >/dev/null
+      echo
+      echo "$(date '+%c') INFO:    Building web resources complete"
    fi
 }
 
@@ -229,8 +232,11 @@ InitialisePostgres(){
       db_version="$(cat "${data_dir}/musicbrainz_db/PG_VERSION")"
    fi
    if [ -z "${db_version}" ]; then
-      echo "$(date '+%c') INFO:    Iniitialise postgres version 12 database cluster"
+      echo "$(date '+%c') INFO:    Initialise postgres version 12 database cluster..."
+      echo
       su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl initdb --pgdata=${data_dir}/musicbrainz_db"
+      echo
+      echo "$(date '+%c') INFO:    Postgres database cluster initialisation complete"
       echo "$(date '+%c') INFO:    Configure connections"
       echo "local   all   all   trust" >> "${data_dir}/musicbrainz_db/pg_hba.conf"
       echo "host   all   all   0.0.0.0/0   md5" >> "${data_dir}/musicbrainz_db/pg_hba.conf"
@@ -239,12 +245,22 @@ InitialisePostgres(){
          -e "/^#listen_addresses = / s/^#//" \
          -e "s/^listen_addresses = '.*'(.*)/listen_addresses = '127.0.0.1'\1/" \
          "${data_dir}/musicbrainz_db/postgresql.conf"
-      echo "$(date '+%c') INFO:    Start PostgreSQL"
-      su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl --pgdata=${data_dir}/musicbrainz_db -o \"-c autovacuum=off\" -w start"
-      echo "$(date '+%c') INFO:    Create empty database"
+      echo "$(date '+%c') INFO:    Start PostgreSQL..."
+      echo
+      su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl --pgdata=${data_dir}/musicbrainz_db  -w start"
+      echo
+      echo "$(date '+%c') INFO:    PostgreSQL startup complete"
+      echo "$(date '+%c') INFO:    Create empty database..."
+      echo
       su "${stack_user}" -c "/usr/bin/createdb"
-      echo "$(date '+%c') INFO:    Stop PostgreSQL server"
+      echo
+      echo "$(date '+%c') INFO:    Database creation complete"
+      echo "$(date '+%c') INFO:    Add superuser permission for user: ${stack_user}"
+      su "${stack_user}" -c "/usr/bin/psql --command \"ALTER USER ${stack_user} WITH SUPERUSER;\""
+      echo "$(date '+%c') INFO:    Stop PostgreSQL server..."
+      echo
       su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl --pgdata=${data_dir}/musicbrainz_db -m fast -w stop"
+      echo "$(date '+%c') INFO:    PostgreSQL server stop complete"
       echo "$(date '+%c') INFO:    Move configuration file to ${config_dir}/postgres directory"
       mv "${data_dir}/musicbrainz_db/postgresql.conf" "${config_dir}/postgres/postgresql.conf"
    fi
@@ -258,7 +274,7 @@ ImportDatabase(){
       chown -R "${stack_user}":"${musicbrainz_group}" "${data_dir}/mbdump/mbtmp"
       cd "${app_base_dir}" || exit 1
       echo "$(date '+%c') INFO:    Start PostgreSQL server"
-      su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl --pgdata=${data_dir}/musicbrainz_db -o \"-c autovacuum=off -c max_wal_size=4096 -c config_file=${config_dir}/postgres/postgresql.conf\" -w start"
+      su "${stack_user}" -c "/usr/lib/postgresql/12/bin/pg_ctl --pgdata=${data_dir}/musicbrainz_db -o \"-c max_wal_size=4096 -c config_file=${config_dir}/postgres/postgresql.conf\" -w start"
       echo "$(date '+%c') INFO:    Import data"
       su "${stack_user}" -c "./admin/InitDb.pl --createdb --import ${data_dir}/mbdump/mbdump*.tar.bz2 --echo --tmp-dir=${data_dir}/mbdump/mbtmp"
       echo "$(date '+%c') INFO:    Stop server"
@@ -291,15 +307,12 @@ LaunchMusicbrainz(){
       rm "${config_dir}/musicbrainz/logs/server.log"
       mv "${config_dir}/musicbrainz/logs/server.bak" "${config_dir}/musicbrainz/logs/server.log"
    fi
-   #cd "${app_base_dir}" || exit 1
-   plackup -I "${app_base_dir}/lib" --server FCGI --daemonize --env deployment --port 9000 --nproc "$(($(nproc) /2))" --pid /run/fcgi.pid --keep-stderr=1 >> "${config_dir}/musicbrainz/logs/server.log" 
+   plackup -I "${app_base_dir}/lib" --server FCGI --daemonize --env deployment --port 9000 --pid /run/fcgi.pid --keep-stderr=1 >> "${config_dir}/musicbrainz/logs/server.log" 
    echo "$(date '+%c') INFO:    Musicbrainz started with pid: $(cat /run/fcgi.pid)"
 }
 
 
 StartReplication(){
-echo "START REP"
-   sleep 999999
    if [ "$(grep -c "${config_dir}/musicbrainz/logs/replication.log")" -gt 1000 ]; then
       echo "$(date '+%c') INFO:    Truncate replication log to last 1000 lines"
       tail -1000 "${config_dir}/musicbrainz/logs/replication.log" > "${config_dir}/musicbrainz/logs/replication.bak"
@@ -307,7 +320,12 @@ echo "START REP"
       mv "${config_dir}/musicbrainz/logs/replication.bak" "${config_dir}/musicbrainz/logs/replication.log"
    fi
    echo "$(date '+%c') INFO:    Start hourly replication"
-   "${app_base_dir}/admin/replication/LoadReplicationChanges" >> "${config_dir}/musicbrainz/logs/replication.log" 2>&1
+   while :; do
+      echo "$(date '+%c') INFO:    Begin replication"
+      "${app_base_dir}/admin/replication/LoadReplicationChanges"
+      echo "$(date '+%c') INFO:    Replication complete"
+      sleep 3600
+   done
 }
 
 ##### Start Script #####

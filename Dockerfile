@@ -1,3 +1,4 @@
+#FROM debian:stable-slim
 FROM ubuntu:latest
 MAINTAINER boredazfcuk
 # musicbrainz_version not used, just increment to force a rebuild
@@ -5,22 +6,15 @@ ARG musicbrainz_version="1.0.0"
 ARG app_repo="metabrainz/musicbrainz-server"
 ARG postgres_addon1="metabrainz/postgresql-musicbrainz-unaccent"
 ARG postgres_addon2="metabrainz/postgresql-musicbrainz-collate"
-ARG os_essentials="ca-certificates wget curl gnupg bzip2 pkg-config net-tools"
-ARG build_dependencies="build-essential cpanminus libexpat1-dev postgresql-server-dev-12 locales-all libicu-dev libssl-dev zlib1g-dev"
-ARG application_dependencies="perl redis-server postgresql-12 postgresql-contrib-12 nginx yarn gettext expat git nodejs"
-ARG cpan_libraries="FCGI FCGI::ProcManager Plack::Handler::Starlet Starlet Starlet::Server Plack::Middleware::Debug::Base Server::Starter "
+ARG os_essentials="ca-certificates wget curl gnupg bzip2 pkg-config net-tools patch"
+ARG build_dependencies="build-essential postgresql-server-dev-all locales-all libexpat1-dev libicu-dev libdb-dev libssl-dev zlib1g-dev"
+ARG application_dependencies="cpanminus perl redis-server postgresql-12 postgresql-contrib-12 nginx yarn gettext expat git-core nodejs"
+ARG cpan_libraries="FCGI FCGI::ProcManager Plack::Handler::Starlet Starlet Starlet::Server Plack::Middleware::Debug::Base Server::Starter Cache::Memcached::Fast Catalyst::Plugin::StackTrace Term::Size::Any"
 ARG DEBIAN_FRONTEND=noninteractive
 ENV app_base_dir="/Musicbrainz" \
    config_dir="/config" \
    data_dir="/data" \
    BABEL_DISABLE_CACHE="1"
-#ARG cpan_libraries="Cache::Memcached::Fast \
-#Cache::Memory \
-#Catalyst::Plugin::Cache::HTTP \
-#Catalyst::Plugin::StackTrace \
-#Digest::MD5::File \
-#Term::Size::Any \
-#Net::SSLeay"
 
 RUN echo "$(date '+%c') | ***** BUILD STARTED FOR MUSICBRAINZ *****" && \
 echo "$(date '+%d/%m/%Y - %H:%M:%S') | Create directories" && \
