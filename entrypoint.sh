@@ -225,6 +225,19 @@ ConfigureMusicbrainz(){
       echo
       echo "$(date '+%c') INFO:    Building web resources complete"
    fi
+
+   if [ "${MUSICBRAINZ_USE_PROXY}" = 1 ]; then
+      echo "$(date '+%c') INFO:    Musicbrainz proxying enabled, checking for favicon fix"
+      if [ "$(grep -c favicon.ico "${config_dir}/nginx/conf.d/musicbrainz.conf")" = 1 ]; then
+         echo "$(date '+%c') INFO:    Applying favicon fix"
+         favicon_fix='location ~* /favicon.ico { alias /Musicbrainz/root/favicon.ico; }'
+         sed -i \
+            "/favicon/i ${favicon_fix}" \
+            "${config_dir}/nginx/conf.d/musicbrainz.conf"
+      else
+         echo "$(date '+%c') INFO:    Fix for favicon already applied"
+      fi
+   fi
 }
 
 InitialisePostgres(){
