@@ -21,3 +21,5 @@ A Musicbrainz container, with added health check
 **web_address**: This is the web address used so that CSS can be generated correctly. If this is not set, it will default to musicbrainz:5000
 
 **MUSICBRAINZ_USE_PROXY**: This variable tells musicbrainz that it is behind a reverse proxy. Set this variable to 1 or 0. 
+
+Litecoin: LfmogjcqJXHnvqGLTYri5M8BofqqXQttk4
